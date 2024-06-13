@@ -91,22 +91,13 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
-        if viewpoint_cam.mask is not None:
-            mask = viewpoint_cam.mask.cuda()
-            gt_image[:, mask == 0] = 0
-            image[:, mask == 0] = 0
-    
-        # if masks_dir:
-        #     for postf in (".jpg.png", ".png.png"):
-        #         mask_path = os.path.join(masks_dir, f"{viewpoint_cam.image_name}{postf}")
-        #         if os.path.exists(mask_path):
-        #             mask =  np.array(Image.open(mask_path))
-        #             image[:, mask==0]=0
-        #             gt_image[:, mask==0]=0
-        #             break
 
-        Ll1 = l1_loss(image, gt_image)
-        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
+        mask  = viewpoint_cam.mask
+        if mask is not None:
+            mask = mask.cuda()
+
+        Ll1 = l1_loss(image, gt_image, mask)
+        loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image, mask=mask))
         loss.backward()
 
         iter_end.record()
