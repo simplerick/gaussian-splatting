@@ -14,10 +14,20 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from math import exp
 
+def apply_mask(image, mask):
+
+    if image.ndimension() == 2:
+        return image * mask
+    if image.ndimension() == 3:
+        return image * mask.unsqueeze(0)
+    if image.ndimension() == 4:
+        return image * mask.unsqueeze(0).unsqueeze(0)
+
+
 def l1_loss(network_output, gt, mask=None):
     if mask is not None:
-        network_output[:, mask == 0] = 0
-        gt[:, mask == 0] = 0
+        network_output = apply_mask(network_output, mask)
+        gt = apply_mask(gt, mask)
 
     return torch.abs((network_output - gt)).mean()
 
