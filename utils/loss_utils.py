@@ -68,3 +68,28 @@ def _ssim(img1, img2, window, window_size, channel, size_average=True, mask=None
     else:
         return ssim_map.mean(1).mean(1).mean(1)
 
+
+def L1_loss_appearance(image, gt_image, gaussians, view_idx, return_transformed_image=False, mask=None):
+    appearance_embedding = gaussians.get_apperance_embedding(view_idx)
+    # center crop the image
+    origH, origW = image.shape[1:]
+    H = origH // 32 * 32
+    W = origW // 32 * 32
+    left = origW // 2 - W // 2
+    top = origH // 2 - H // 2
+    crop_image = image[:, top:top+H, left:left+W]
+    crop_gt_image = gt_image[:, top:top+H, left:left+W]
+    if mask is not None:
+        mask = mask[top:top+H, left:left+W]
+    
+    # down sample the image
+    crop_image_down = torch.nn.functional.interpolate(crop_image[None], size=(H//32, W//32), mode="bilinear", align_corners=True)[0]
+    
+    crop_image_down = torch.cat([crop_image_down, appearance_embedding[None].repeat(H//32, W//32, 1).permute(2, 0, 1)], dim=0)[None]
+    mapping_image = gaussians.appearance_network(crop_image_down)
+    transformed_image = mapping_image * crop_image
+    if not return_transformed_image:
+        return l1_loss(transformed_image, crop_gt_image, mask=mask)
+    else:
+        transformed_image = torch.nn.functional.interpolate(transformed_image, size=(origH, origW), mode="bilinear", align_corners=True)[0]
+        return transformed_image
