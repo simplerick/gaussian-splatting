@@ -57,6 +57,7 @@ class ModelParams(ParamGroup):
         self.masked = False
         self.mask_dilate = 10
         self.use_decoupled_appearance = False
+        self.tv_lambda = 0.5
 
         super().__init__(parser, "Loading Parameters", sentinel)
 
