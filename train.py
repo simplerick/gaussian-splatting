@@ -107,10 +107,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
         loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image, mask=mask))
 
 
-        if dataset.tv_lambda:
+        if opt.lambda_tv and iteration > opt.tv_from_iter and iteration < opt.tv_until_iter:
             depth = normalize_depth(render_pkg["depth"])
             tv = total_variation_loss(depth)
-            loss += dataset.tv_lambda * tv
+            loss += opt.lambda_tv * tv
 
         loss.backward()
         iter_end.record()
