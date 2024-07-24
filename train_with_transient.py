@@ -126,7 +126,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                             mode='constant', 
                             value=0)
         #TODO: dilate
-        weights = transient_model(padded_image).squeeze()[pad_width_left: pad_width_left + width, pad_height_top: pad_height_top + height]
+        weights = transient_model(padded_image.unsqueeze(0)).squeeze()[pad_width_left: pad_width_left + width, pad_height_top: pad_height_top + height]
 
         # overlay weights on gt_image as green color intensity for visualization
         with torch.no_grad():
