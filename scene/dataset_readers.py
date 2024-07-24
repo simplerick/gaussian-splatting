@@ -107,7 +107,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder, masks_folde
 
         mask=None
         if masks_folder:
-            mask_path = os.path.join(masks_folder, os.path.basename(extr.name))
+            mask_path = os.path.join(masks_folder, os.path.basename(extr.name)+".png")
             if os.path.exists(mask_path):
                 mask = Image.open(mask_path)
                 if mask_dilate:
@@ -165,8 +165,8 @@ def readColmapSceneInfo(path, images, eval, masked, mask_dilate, dynamic_scores,
         cam_intrinsics = read_intrinsics_text(cameras_intrinsic_file)
 
     reading_dir = "images" if images == None else images
-    masks_folder = os.path(masked) if masked is not None else None
-    cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir), masks_folder=masked, dynamic_scores=dynamic_scores, mask_dilate=mask_dilate)
+    masks_folder = os.path.join(path, "masks") if masked else None
+    cam_infos_unsorted = readColmapCameras(cam_extrinsics=cam_extrinsics, cam_intrinsics=cam_intrinsics, images_folder=os.path.join(path, reading_dir), masks_folder=masks_folder, dynamic_scores=dynamic_scores, mask_dilate=mask_dilate)
     cam_infos = sorted(cam_infos_unsorted.copy(), key = lambda x : x.image_name)
 
     if eval:
