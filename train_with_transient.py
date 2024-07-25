@@ -347,7 +347,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument('--stop_train_transient', action='store_true', default=False)
-    parser.add_argument('--eval_path', action='store_true', default=None)
+    parser.add_argument('--eval_path', type=str, default=None)
 
     # parser.add_argument("--masked", type=str, default = None)
 
