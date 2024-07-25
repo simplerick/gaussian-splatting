@@ -204,42 +204,42 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
                     make_gif(masked_images, os.path.join(scene.model_path, f"masked.gif"), framerate=8)
                     make_gif(rendered_images, os.path.join(scene.model_path, f"rendered.gif"), framerate=8)
-                if eval_path:
-                    dataset.source_path = eval_path
-                    eval_scene = Scene(dataset, gaussians)    
-                    ref_cams = []
-                    for cam in eval_scene.getTrainCameras():
-                        try:
-                            int(cam.image_name)
-                        except:
-                            cam.image_name = cam.image_name[4:]
-                            ref_cams.append(cam)
+                    if eval_path:
+                        dataset.source_path = eval_path
+                        eval_scene = Scene(dataset, gaussians)    
+                        ref_cams = []
+                        for cam in eval_scene.getTrainCameras():
+                            try:
+                                int(cam.image_name)
+                            except:
+                                cam.image_name = cam.image_name[4:]
+                                ref_cams.append(cam)
 
-                    ref_cams = sorted(ref_cams, key= lambda x: int(x.image_name))
-                    rendered_images = []
-                    for cam in tqdm(ref_cams):
-                        rendered_images.append(prep_img(render(cam, gaussians, pipe, bg)["render"]))
+                        ref_cams = sorted(ref_cams, key= lambda x: int(x.image_name))
+                        rendered_images = []
+                        for cam in tqdm(ref_cams):
+                            rendered_images.append(prep_img(render(cam, gaussians, pipe, bg)["render"]))
 
-                    make_gif(rendered_images, os.path.join(args.model_path, f"similar_traj.gif"), framerate=8, rate=10)
+                        make_gif(rendered_images, os.path.join(args.model_path, f"similar_traj.gif"), framerate=8, rate=10)
 
 
-                    ssims = []
-                    psnrs = []
-                    for idx, view in enumerate(tqdm(ref_cams)):
-                        with torch.no_grad():
-                            rendered_img  = torch.clamp(render(view, gaussians, pp, bg)["render"], 0.0, 1.0)
-                            gt_image = torch.clamp(view.original_image.to("cuda"), 0.0, 1.0)
-                            ssims.append(ssim(rendered_img, gt_image).mean())
-                            psnrs.append(psnr(rendered_img, gt_image).mean())
-                            if (idx + 1) % 50 == 0:
-                                torch.cuda.empty_cache()
+                        ssims = []
+                        psnrs = []
+                        for idx, view in enumerate(tqdm(ref_cams)):
+                            with torch.no_grad():
+                                rendered_img  = torch.clamp(render(view, gaussians, pp, bg)["render"], 0.0, 1.0)
+                                gt_image = torch.clamp(view.original_image.to("cuda"), 0.0, 1.0)
+                                ssims.append(ssim(rendered_img, gt_image).mean())
+                                psnrs.append(psnr(rendered_img, gt_image).mean())
+                                if (idx + 1) % 50 == 0:
+                                    torch.cuda.empty_cache()
 
-                    print("  SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5"))
-                    print("  PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5"))
+                        print("  SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5"))
+                        print("  PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5"))
 
-                    with open("report.txt", "w") as f:
-                        f.write("SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5", "\n"))
-                        f.write("PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5", "\n"))
+                        with open("report.txt", "w") as f:
+                            f.write("SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5", "\n"))
+                            f.write("PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5", "\n"))
 
 
             # Densification
