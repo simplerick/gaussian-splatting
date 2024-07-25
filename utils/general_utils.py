@@ -18,7 +18,7 @@ import torch.nn.functional as F
 from PIL import Image
 import os
 import imageio
-import tqdm
+from tqdm import tqdm
 
 def inverse_sigmoid(x):
     return torch.log(x/(1-x))
