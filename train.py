@@ -12,19 +12,23 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim
+from utils.loss_utils import l1_loss, ssim, L1_loss_appearance, total_variation_loss, image2canny
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
-from utils.image_utils import psnr
+from utils.image_utils import psnr, normalize_depth
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 
 # from PIL import Image
 # import numpy as np
+import scipy
+import segmentation_models_pytorch as smp
+from pathlib import Path
+
 
 try:
     from torch.utils.tensorboard import SummaryWriter
@@ -76,7 +80,10 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         iter_start.record()
 
-        gaussians.update_learning_rate(iteration)
+        if opt.lambda_tv and iteration >= opt.tv_until_iter:
+            gaussians.freeze_xyz()
+        else:
+            gaussians.update_learning_rate(iteration)
 
         # Every 1000 its we increase the levels of SH up to a maximum degree
         if iteration % 1000 == 0:

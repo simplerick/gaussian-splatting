@@ -12,20 +12,23 @@
 import os
 import torch
 from random import randint
-from utils.loss_utils import l1_loss, ssim
+from utils.loss_utils import l1_loss, ssim, total_variation_loss, image2canny
 from gaussian_renderer import render, network_gui
 import sys
 from scene import Scene, GaussianModel
 from utils.general_utils import safe_state
 import uuid
 from tqdm import tqdm
-from utils.image_utils import psnr
+from utils.image_utils import psnr, normalize_depth
 from argparse import ArgumentParser, Namespace
 from arguments import ModelParams, PipelineParams, OptimizationParams
 from PIL import Image
 # import numpy as np
 import segmentation_models_pytorch as smp
 from pathlib import Path
+import torch.nn.functional as F
+import scipy
+from  utils.general_utils import pred_weights, mask_image, make_gif, prep_img
 
 
 try:
@@ -34,7 +37,7 @@ try:
 except ImportError:
     TENSORBOARD_FOUND = False
 
-def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, stop_train_transient):
+def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoint_iterations, checkpoint, debug_from, stop_train_transient, eval_path):
     first_iter = 0
     tb_writer = prepare_output_and_logger(dataset)
     gaussians = GaussianModel(dataset.sh_degree)
@@ -105,12 +108,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
         # Loss
         gt_image = viewpoint_cam.original_image.cuda()
-        # resize image to 224x224
-        gt_image_resized = torch.nn.functional.interpolate(gt_image.unsqueeze(0), size=(224, 224), mode='bilinear', align_corners=True)
-
-        # predict weights for each pixel with transient model
-        weights = transient_model(gt_image_resized)
-        weights = torch.nn.functional.interpolate(weights, size=(gt_image.shape[1], gt_image.shape[2]), mode='bilinear', align_corners=True).squeeze(0)
+        weights = pred_weights(gt_image, transient_model)
 
         # overlay weights on gt_image as green color intensity for visualization
         with torch.no_grad():
@@ -151,6 +149,19 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             loss = (1.0 - opt.lambda_dssim) * Ll1 + opt.lambda_dssim * (1.0 - ssim(image, gt_image))
             transient_model.eval()
 
+
+
+        if opt.lambda_tv and iteration > opt.tv_from_iter and iteration < opt.tv_until_iter:
+            depth = normalize_depth(render_pkg["depth"])
+
+            tv_mask = None
+            if iteration > opt.canny_start:
+                canny_mask = image2canny(image.permute(1,2,0), 50, 150, isEdge1=False)
+                canny_mask = scipy.ndimage.binary_erosion(canny_mask, iterations=2, border_value=1)
+                tv_mask = torch.tensor(canny_mask).cuda()
+            tv = total_variation_loss(depth, tv_mask)
+            loss += opt.lambda_tv * tv
+
         loss.backward()
 
         iter_end.record()
@@ -174,6 +185,59 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             if (iteration in saving_iterations):
                 print("\n[ITER {}] Saving Gaussians".format(iteration))
                 scene.save(iteration)
+                torch.save(transient_model.state_dict(), scene.model_path + f"/transient_{iteration}.pth")
+                if iteration == saving_iterations[-1]:
+                    transient_model.eval()
+                    rendered_images = []
+                    masked_images = []
+                    cams = sorted(scene.getTrainCameras(), key=lambda x: int(x.image_name))
+
+                    for viewpoint_cam in tqdm(cams):
+                        rendered_images.append(prep_img(render(viewpoint_cam, gaussians, pipe, bg)["render"]))
+                        gt_image = viewpoint_cam.original_image.cuda()
+                        masked_images.append(mask_image(gt_image, transient_model))
+
+                    make_gif(masked_images, os.path.join(scene.model_path, f"masked.gif"), framerate=8)
+                    make_gif(rendered_images, os.path.join(scene.model_path, f"rendered.gif"), framerate=8)
+                    if eval_path:
+                        dataset.source_path = eval_path
+
+                        stub_gaussians = GaussianModel(dataset.sh_degree)
+                        eval_scene = Scene(dataset, stub_gaussians)
+                        ref_cams = []
+                        for cam in eval_scene.getTrainCameras():
+                            try:
+                                int(cam.image_name)
+                            except:
+                                cam.image_name = cam.image_name[4:]
+                                ref_cams.append(cam)
+
+                        ref_cams = sorted(ref_cams, key= lambda x: int(x.image_name))
+                        rendered_images = []
+                        for cam in tqdm(ref_cams):
+                            rendered_images.append(prep_img(render(cam, gaussians, pipe, bg)["render"]))
+
+                        make_gif(rendered_images, os.path.join(args.model_path, f"similar_traj.gif"), framerate=8, rate=10)
+
+
+                        ssims = []
+                        psnrs = []
+                        for idx, view in enumerate(tqdm(ref_cams)):
+                            with torch.no_grad():
+                                rendered_img  = torch.clamp(render(view, gaussians, pp, bg)["render"], 0.0, 1.0)
+                                gt_image = torch.clamp(view.original_image.to("cuda"), 0.0, 1.0)
+                                ssims.append(ssim(rendered_img, gt_image).mean())
+                                psnrs.append(psnr(rendered_img, gt_image).mean())
+                                if (idx + 1) % 50 == 0:
+                                    torch.cuda.empty_cache()
+
+                        print("  SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5"))
+                        print("  PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5"))
+
+                        with open("report.txt", "w") as f:
+                            f.write("SSIM : {:>12.7f}".format(torch.tensor(ssims).mean(), ".5", "\n"))
+                            f.write("PSNR : {:>12.7f}".format(torch.tensor(psnrs).mean(), ".5", "\n"))
+
 
             # Densification
             if iteration < opt.densify_until_iter:
@@ -199,7 +263,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
 
             torch.save(transient_model.state_dict(), Path(dataset.model_path) / "transient.pth")
 
-def prepare_output_and_logger(args):    
+def prepare_output_and_logger(args):
     if not args.model_path:
         if os.getenv('OAR_JOB_ID'):
             unique_str=os.getenv('OAR_JOB_ID')
@@ -272,12 +336,14 @@ if __name__ == "__main__":
     parser.add_argument('--port', type=int, default=6003)
     parser.add_argument('--debug_from', type=int, default=-1)
     parser.add_argument('--detect_anomaly', action='store_true', default=False)
-    parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 40_000])
-    parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 40_000])
+    parser.add_argument("--test_iterations", nargs="+", type=int, default=[7_000, 30_000])
+    parser.add_argument("--save_iterations", nargs="+", type=int, default=[7_000, 30_000])
     parser.add_argument("--quiet", action="store_true")
     parser.add_argument("--checkpoint_iterations", nargs="+", type=int, default=[])
     parser.add_argument("--start_checkpoint", type=str, default = None)
     parser.add_argument('--stop_train_transient', action='store_true', default=False)
+    parser.add_argument('--eval_path', type=str, default=None)
+
     # parser.add_argument("--masked", type=str, default = None)
 
     args = parser.parse_args(sys.argv[1:])
@@ -291,7 +357,7 @@ if __name__ == "__main__":
     # Start GUI server, configure and run training
     network_gui.init(args.ip, args.port)
     torch.autograd.set_detect_anomaly(args.detect_anomaly)
-    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, args.stop_train_transient)
+    training(lp.extract(args), op.extract(args), pp.extract(args), args.test_iterations, args.save_iterations, args.checkpoint_iterations, args.start_checkpoint, args.debug_from, args.stop_train_transient, args.eval_path)
 
     # All done
     print("\nTraining complete.")
