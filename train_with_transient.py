@@ -206,7 +206,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     make_gif(rendered_images, os.path.join(scene.model_path, f"rendered.gif"), framerate=8)
                     if eval_path:
                         dataset.source_path = eval_path
-                        eval_scene = Scene(dataset, gaussians)    
+
+                        stub_gaussians = GaussianModel(dataset.sh_degree)
+                        eval_scene = Scene(dataset, stub_gaussians)    
                         ref_cams = []
                         for cam in eval_scene.getTrainCameras():
                             try:
