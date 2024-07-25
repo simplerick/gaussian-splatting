@@ -196,13 +196,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     rendered_images = []
                     masked_images = []
                     cams = sorted(scene.getTrainCameras(), key=lambda x: int(x.image_name))
-
-                    def render_image(view):
-                        rendering = render(view, gaussians, pipe, bg)["render"]
-                        return prep_img(rendering)
     
                     for viewpoint_cam in tqdm(cams):
-                        rendered_images.append(render_image(viewpoint_cam))
+                        rendered_images.append(prep_img(render(viewpoint_cam, gaussians, pipe, bg)["render"]))
                         gt_image = viewpoint_cam.original_image.cuda()
                         masked_images.append(mask_image(gt_image, transient_model))
 
@@ -222,7 +218,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
                     ref_cams = sorted(ref_cams, key= lambda x: int(x.image_name))
                     rendered_images = []
                     for cam in tqdm(ref_cams):
-                        rendered_images.append(render_image(cam))
+                        rendered_images.append(prep_img(render(cam, gaussians, pipe, bg)["render"]))
 
                     make_gif(rendered_images, os.path.join(args.model_path, f"similar_traj.gif"), framerate=8, rate=10)
 
