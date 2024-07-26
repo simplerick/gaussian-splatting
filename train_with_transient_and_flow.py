@@ -39,7 +39,8 @@ except ImportError:
 
 
 def compute_depth_normalized_flow(flow, depth):
-    flow = torch.sqrt((flow[..., 0]-flow[..., 0].mean())**2 + (flow[..., 1]-flow[..., 1])**2)
+    flow = flow - flow.mean([0, 1], keepdim=True)
+    flow = torch.sqrt((flow[..., 0])**2 + (flow[..., 1])**2)
     # resize to depth width and height
     flow = F.interpolate(flow.view(1, 1, *flow.shape), size=(depth.shape[0], depth.shape[1]), mode='bilinear', align_corners=True).squeeze()
     normalized_flow = flow * depth
@@ -165,7 +166,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             flow = viewpoint_cam.flow.cuda()
             normalized_flow = compute_depth_normalized_flow(flow, depth)
 
-            large_flow = (normalized_flow > 100.0).float()
+            large_flow = (normalized_flow > 250.0).float()
 
             with torch.no_grad():
                 if iteration % 100 == 0:
