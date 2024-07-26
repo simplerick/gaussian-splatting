@@ -56,8 +56,7 @@ def ssim(img1, img2, window_size=11, size_average=True, mask=None):
     channel = img1.size(-3)
     window = create_window(window_size, channel)
 
-    if img1.is_cuda:
-        window = window.cuda(img1.get_device())
+    window = window.to(img1.device)
     window = window.type_as(img1)
 
     return _ssim(img1, img2, window, window_size, channel, size_average, mask)

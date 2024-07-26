@@ -55,7 +55,7 @@ class ModelParams(ParamGroup):
         self.data_device = "cuda"
         self.eval = False
         self.masked = ""
-        self.dynamic_score = ""
+        self.flow = ""
         self.mask_dilate = 10
         self.use_decoupled_appearance = False
 

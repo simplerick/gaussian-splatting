@@ -23,7 +23,7 @@ from plyfile import PlyData, PlyElement
 from utils.sh_utils import SH2RGB
 from scene.gaussian_model import BasicPointCloud
 import scipy.ndimage
-
+import torch
 
 class CameraInfo(NamedTuple):
     uid: int
@@ -33,7 +33,7 @@ class CameraInfo(NamedTuple):
     FovX: np.array
     image: np.array
     mask: np.array
-    dynamic_score: np.array
+    flow: np.array
     image_path: str
     image_name: str
     width: int
@@ -117,11 +117,12 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder, masks_folde
 
         dynamic_score=None
         if dynamic_scores:
-            dynamic_score_path = os.path.join(dynamic_scores, os.path.basename(extr.name))
+            dynamic_score_path = os.path.join(dynamic_scores, os.path.basename(extr.name)[:-4] + ".pt")
             if os.path.exists(dynamic_score_path):
-                dynamic_score = Image.open(dynamic_score_path).convert("L")
+                # dynamic_score = Image.open(dynamic_score_path)
+                dynamic_score = torch.load(dynamic_score_path)
 
-        cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image, mask=mask, dynamic_score=dynamic_score,
+        cam_info = CameraInfo(uid=uid, R=R, T=T, FovY=FovY, FovX=FovX, image=image, mask=mask, flow=dynamic_score,
                               image_path=image_path, image_name=image_name, width=width, height=height)
         cam_infos.append(cam_info)
     sys.stdout.write('\n')
