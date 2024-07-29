@@ -161,7 +161,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, checkpoi
             transient_model.eval()
 
 
-        if viewpoint_cam.flow is not None:
+        if viewpoint_cam.flow is not None and iteration > 1000:
             depth = render_pkg["depth"].detach()
             flow = viewpoint_cam.flow.cuda()
             normalized_flow = compute_depth_normalized_flow(flow, depth)

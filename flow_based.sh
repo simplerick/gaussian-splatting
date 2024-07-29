@@ -19,7 +19,7 @@ port=$(( ( RANDOM % 1000 )  + 6000 ))
 
 # Predict flow with ProPainter script
 (
-  cd ../flowsam/flow
+  cd flow
   conda run -n gaussian_splatting --no-capture-output python run_inference.py "$source_folder/images" "$flow_folder" 2  # 2 is a batch size
   python ../images_to_video.py "$flow_folder/FlowImages_gap1/images" "$flow_folder/flow_gap1.mp4" 5
 )
